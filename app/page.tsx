@@ -147,8 +147,8 @@ export default function ChatPage() {
           .replace(/\n+/g, " ")
           .replace(/\s+/g, " ")
           .split(/(?=\b\d+\.\s)/)
-          .map(line => line.trim())
-          .filter(line => line)
+          .map((line: string) => line.trim())
+          .filter((line: string) => line.length > 0)
           .join("\n");
       } else {
         // Regular text - add line breaks after sentences
