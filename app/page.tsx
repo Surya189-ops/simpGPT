@@ -339,7 +339,9 @@ export default function ChatPage() {
             </button>
             <div className="min-w-0">
               <h1 className="text-lg sm:text-2xl font-bold text-blue-600 truncate">SimpGPT</h1>
-              <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">Simple answers for everyone</p>
+              <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">
+                Complex topics. Simple explanations.
+              </p>
             </div>
           </div>
 

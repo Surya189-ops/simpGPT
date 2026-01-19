@@ -4,8 +4,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'SimpGPT - Simple AI Answers',
-  description: 'Get simple, easy-to-understand answers powered by AI',
+  title: 'SimpGPT - Ask anything',
+  description: "Learn faster with simple, accurate, and easy explanations."
 };
 
 export default function RootLayout({
