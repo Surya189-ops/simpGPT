@@ -34,7 +34,7 @@ export default function ChatPage() {
     if (savedChats) {
       const parsedChats = JSON.parse(savedChats);
       const permanentChats = parsedChats.filter((chat: Chat) => !chat.isTemporary);
-      
+
       if (permanentChats.length > 0) {
         setChats(permanentChats);
         setCurrentChatId(permanentChats[0].id);
@@ -73,7 +73,7 @@ export default function ChatPage() {
         {
           id: '1',
           role: 'assistant',
-          content: isTemporary 
+          content: isTemporary
             ? 'Hi! This is a temporary chat. It will be deleted when you refresh the page or start a new chat.'
             : 'Hi! I\'m SimpGPT. I explain things in simple, easy words. Ask me anything!',
           timestamp: Date.now(),
@@ -112,8 +112,8 @@ export default function ChatPage() {
       prevChats.map((chat) => {
         if (chat.id === currentChatId) {
           const updatedMessages = [...chat.messages, userMessage];
-          const newTitle = chat.title === 'New Chat' 
-            ? input.trim().slice(0, 30) 
+          const newTitle = chat.title === 'New Chat'
+            ? input.trim().slice(0, 30)
             : chat.title;
           return { ...chat, messages: updatedMessages, title: newTitle };
         }
@@ -124,11 +124,29 @@ export default function ChatPage() {
     setInput('');
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+
+      const data = await response.json();
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'This is a test response. The AI will be connected in Level 2!',
+        role: "assistant",
+        content: data.reply
+          .replace(/\n+/g, " ")
+          .replace(/\s+(?=\d+\.)/g, "")
+          .split(/(?=\b\d+\.\s)/)
+          .join("\n")
+          .trim(),
         timestamp: Date.now(),
       };
 
@@ -140,13 +158,16 @@ export default function ChatPage() {
           return chat;
         })
       );
+    } catch (error) {
+      console.error("AI Error:", error);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const createNewChat = () => {
     setChats((prevChats) => prevChats.filter((chat) => !chat.isTemporary));
-    
+
     const newChat: Chat = {
       id: Date.now().toString(),
       title: 'New Chat',
@@ -224,9 +245,8 @@ export default function ChatPage() {
 
       {/* Sidebar */}
       <div
-        className={`${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-30 w-64 bg-gray-900 text-white transition-transform duration-300 flex flex-col`}
+        className={`${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-30 w-64 bg-gray-900 text-white transition-transform duration-300 flex flex-col`}
       >
         <div className="p-4 border-b border-gray-700">
           <button
@@ -242,11 +262,10 @@ export default function ChatPage() {
             <div
               key={chat.id}
               onClick={() => selectChat(chat.id, chat.isTemporary || false)}
-              className={`group flex items-center justify-between px-3 py-2 mb-1 rounded-lg cursor-pointer transition-colors ${
-                currentChatId === chat.id
-                  ? 'bg-gray-800'
-                  : 'hover:bg-gray-800'
-              }`}
+              className={`group flex items-center justify-between px-3 py-2 mb-1 rounded-lg cursor-pointer transition-colors ${currentChatId === chat.id
+                ? 'bg-gray-800'
+                : 'hover:bg-gray-800'
+                }`}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -327,11 +346,10 @@ export default function ChatPage() {
           {/* Temporary Chat Toggle */}
           <button
             onClick={toggleTemporaryMode}
-            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-all flex-shrink-0 ${
-              isTemporaryMode
-                ? 'bg-orange-100 text-orange-800 border-2 border-orange-400'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-all flex-shrink-0 ${isTemporaryMode
+              ? 'bg-orange-100 text-orange-800 border-2 border-orange-400'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
             title={isTemporaryMode ? 'Temporary Chat Active' : 'Enable Temporary Chat'}
           >
             <svg
@@ -384,22 +402,19 @@ export default function ChatPage() {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${
-                  message.role === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
               >
                 <div
-                  className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
-                    message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
-                  }`}
-                >
-                  <p className="text-xs sm:text-sm leading-relaxed break-words">{message.content}</p>
-                  <span
-                    className={`text-xs mt-1 block ${
-                      message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${message.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-800 border border-gray-200 shadow-sm'
                     }`}
+                >
+                  <p className="text-xs sm:text-sm leading-relaxed break-words whitespace-pre-line">{message.content}</p>
+                  <span
+                    className={`text-xs mt-1 block ${message.role === 'user' ? 'text-blue-100' : 'text-gray-400'
+                      }`}
                   >
                     {formatTime(message.timestamp)}
                   </span>
