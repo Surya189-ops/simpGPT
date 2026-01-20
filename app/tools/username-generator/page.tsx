@@ -66,13 +66,19 @@ export default function UsernameGenerator() {
   const [keyword, setKeyword] = useState("");
   const [names, setNames] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState("general");
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState("instagram");
+  const [selectedGender, setSelectedGender] = useState<"boy" | "girl" | "unisex">("unisex");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [showPlatforms, setShowPlatforms] = useState(true);
 
-  async function generateUsernames() {
-    setLoading(true);
-    setNames([]);
+  async function generateUsernames(isLoadMore = false) {
+    if (isLoadMore) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setNames([]);
+    }
 
     const platform = socialMediaPlatforms.find(p => p.id === selectedPlatform);
 
@@ -82,14 +88,22 @@ export default function UsernameGenerator() {
       body: JSON.stringify({ 
         keyword,
         platform: selectedPlatform,
-        platformRules: platform?.rules 
+        platformRules: platform?.rules,
+        gender: selectedGender,
+        count: isLoadMore ? 5 : 10
       }),
     });
 
     const data = await res.json();
-    setNames(data.names || []);
-    setLoading(false);
-    setShowPlatforms(false);
+    
+    if (isLoadMore) {
+      setNames(prev => [...prev, ...(data.names || [])]);
+      setLoadingMore(false);
+    } else {
+      setNames(data.names || []);
+      setLoading(false);
+      setShowPlatforms(false);
+    }
   }
 
   function copyName(name: string, index: number) {
@@ -135,7 +149,7 @@ export default function UsernameGenerator() {
                 <button
                   key={platform.id}
                   onClick={() => setSelectedPlatform(platform.id)}
-                  className={`relative group overflow-hidden rounded-xl p-3 sm:p-4 transition-all duration-300 transform hover:scale-105 ${
+                  className={`relative group overflow-hidden rounded-xl p-3 sm:p-4 transition-all duration-300 transform hover:scale-105 active:scale-95 ${
                     selectedPlatform === platform.id
                       ? 'ring-4 ring-purple-500 shadow-lg'
                       : 'hover:shadow-md'
@@ -173,22 +187,49 @@ export default function UsernameGenerator() {
           )}
         </div>
 
-        {/* Keyword Input */}
+        {/* Keyword Input with Gender Selection */}
         <div className="mb-4">
           <label className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 block">
             Keyword (Optional)
           </label>
-          <input
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="e.g., phoenix, cosmic, shadow..."
-            className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-          />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex-1 relative">
+              <input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+              />
+            </div>
+            <div className="flex gap-2 justify-center sm:justify-start">
+              <button
+                onClick={() => setSelectedGender("boy")}
+                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-2xl transition-all ${
+                  selectedGender === "boy"
+                    ? 'bg-blue-500 shadow-lg ring-4 ring-blue-200 scale-105'
+                    : 'bg-gray-100 hover:bg-gray-200 active:scale-95'
+                }`}
+                title="Boy"
+              >
+                👦
+              </button>
+              <button
+                onClick={() => setSelectedGender("girl")}
+                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-2xl transition-all ${
+                  selectedGender === "girl"
+                    ? 'bg-pink-500 shadow-lg ring-4 ring-pink-200 scale-105'
+                    : 'bg-gray-100 hover:bg-gray-200 active:scale-95'
+                }`}
+                title="Girl"
+              >
+                👧
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Generate Button */}
         <button
-          onClick={generateUsernames}
+          onClick={() => generateUsernames(false)}
           disabled={loading}
           className={`w-full bg-gradient-to-r ${selectedPlatformData?.gradient} text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none`}
         >
@@ -220,7 +261,7 @@ export default function UsernameGenerator() {
               <span className="text-xs sm:text-sm text-gray-500">{names.length} results</span>
             </div>
             
-            <div className="space-y-2 max-h-[400px] sm:max-h-96 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
+            <div className="space-y-2 max-h-[50vh] sm:max-h-96 overflow-y-auto pr-1 sm:pr-2 custom-scrollbar">
               {names.map((name, i) => (
                 <div
                   key={i}
@@ -248,13 +289,32 @@ export default function UsernameGenerator() {
               ))}
             </div>
 
+            {/* Load More Button */}
+            <button
+              onClick={() => generateUsernames(true)}
+              disabled={loadingMore}
+              className="w-full mt-4 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold hover:from-purple-700 hover:to-pink-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            >
+              {loadingMore ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Loading More...
+                </span>
+              ) : (
+                '+ Load More (5)'
+              )}
+            </button>
+
             <button
               onClick={() => {
                 setNames([]);
                 setShowPlatforms(true);
                 setKeyword("");
               }}
-              className="w-full mt-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all"
+              className="w-full mt-3 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 transition-all active:scale-95"
             >
               Generate New Batch
             </button>
