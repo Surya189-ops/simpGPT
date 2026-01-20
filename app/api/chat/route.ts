@@ -2,52 +2,47 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!,
 });
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json();
+    const body = await req.json();
+    const { messages, mode } = body;
+
+    let systemPrompt = `
+You are SimpGPT.
+Explain topics in simple clear language.
+Always answer in short numbered lines.
+Do not use emojis or markdown.
+`;
+
+    if (mode === "eli5") {
+      systemPrompt = `
+You explain any topic like speaking to a 5 year old child.
+Use very simple words.
+Always reply in short numbered lines.
+No emojis. No markdown.
+`;
+    }
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_tokens: 350,
       messages: [
-        {
-          role: "system",
-          content: `
-You are SimpGPT.
-
-Explain topics in simple and clear language, but keep correct technical meaning.
-Do not talk like a kids story. Do not oversimplify concepts.
-
-Always format answers as numbered points.
-Each sentence must start with a number and a dot.
-Example:
-1. First point
-2. Second point
-
-Do not add extra blank lines.
-Do not use markdown or emojis.
-
-Keep responses concise but informative.
-Never exceed 500 words.
-          `,
-        },
+        { role: "system", content: systemPrompt },
         ...messages,
       ],
+      max_tokens: 300,
     });
 
-    const reply =
-      completion.choices[0]?.message?.content?.trim() ||
-      "Sorry, I could not generate a response.";
+    const reply = completion.choices[0].message.content || "No response";
 
     return NextResponse.json({ reply });
 
   } catch (error) {
     console.error("API Error:", error);
     return NextResponse.json(
-      { reply: "Sorry, something went wrong. Please try again." },
+      { reply: "Something went wrong" },
       { status: 500 }
     );
   }
