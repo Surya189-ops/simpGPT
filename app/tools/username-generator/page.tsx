@@ -1,105 +1,102 @@
-'use client';
+"use client";
 
 import { useState } from "react";
 
 const platforms = [
   "Instagram",
-  "TikTok",
+  "Twitter",
   "YouTube",
-  "Twitter (X)",
-  "Facebook",
+  "TikTok",
+  "Reddit",
   "Snapchat",
   "Discord",
-  "Reddit",
-  "Twitch",
-  "Pinterest",
   "LinkedIn",
   "Gaming",
-  "Blog / Website",
-  "Personal Brand"
 ];
 
-export default function UsernameGeneratorPage() {
-  const [keyword, setKeyword] = useState("");
+export default function UsernameGenerator() {
+  const [name, setName] = useState("");
   const [platform, setPlatform] = useState("Instagram");
-  const [result, setResult] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState<string[]>([]);
 
-  async function generateUsernames() {
-    if (!keyword.trim()) return;
-    setLoading(true);
-    setResult("");
+  const generateUsernames = () => {
+    if (!name.trim()) return;
 
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: [
-          {
-            role: "user",
-            content: `
-Generate 20 unique ${platform} username ideas using this keyword: ${keyword}.
-Rules:
-Return answers as numbered list.
-No emojis.
-Keep names short.
-Mix numbers or underscores if helpful.
-Make them creative and brandable.
-`
-          }
-        ]
-      })
-    });
+    const base = name.replace(/\s+/g, "").toLowerCase();
+    const suggestions = [];
 
-    const data = await response.json();
-    setResult(data.reply);
-    setLoading(false);
-  }
+    for (let i = 0; i < 10; i++) {
+      const num = Math.floor(Math.random() * 999);
+      const styles = [
+        `${base}${num}`,
+        `${base}_${num}`,
+        `${platform.toLowerCase()}_${base}`,
+        `${base}.${platform.toLowerCase()}`,
+        `the_${base}`,
+      ];
+      suggestions.push(styles[Math.floor(Math.random() * styles.length)]);
+    }
+
+    setResults(suggestions);
+  };
 
   return (
-    <div className="min-h-screen bg-purple-50 flex flex-col items-center px-4 py-6">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white shadow-lg rounded-xl p-6 w-full max-w-md">
+        <h1 className="text-2xl font-bold text-center text-blue-600">
+          Username Generator
+        </h1>
 
-      {/* Header */}
-      <h1 className="text-2xl sm:text-3xl font-bold text-purple-700 mb-2 text-center">
-        Social Username Generator
-      </h1>
-      <p className="text-sm sm:text-base text-gray-700 text-center mb-6 max-w-xl">
-        Generate unique usernames for Instagram, TikTok, YouTube, Discord, Gaming and more.
-      </p>
+        <p className="text-sm text-gray-600 text-center mt-2">
+          Generate unique usernames for any platform
+        </p>
 
-      {/* Input */}
-      <input
-        className="w-full max-w-3xl p-3 border rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
-        placeholder="Enter name or keyword..."
-        value={keyword}
-        onChange={(e) => setKeyword(e.target.value)}
-      />
+        <div className="mt-5 space-y-4">
+          <input
+            type="text"
+            placeholder="Enter your name or keyword"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
 
-      {/* Platform Select */}
-      <select
-        className="w-full max-w-3xl mt-3 p-3 border rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-        value={platform}
-        onChange={(e) => setPlatform(e.target.value)}
-      >
-        {platforms.map((p) => (
-          <option key={p}>{p}</option>
-        ))}
-      </select>
+          <select
+            value={platform}
+            onChange={(e) => setPlatform(e.target.value)}
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {platforms.map((p) => (
+              <option key={p}>{p}</option>
+            ))}
+          </select>
 
-      {/* Button */}
-      <button
-        onClick={generateUsernames}
-        className="mt-4 bg-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-purple-700 transition w-full max-w-xs"
-      >
-        {loading ? "Generating..." : "Generate Usernames"}
-      </button>
-
-      {/* Output */}
-      {result && (
-        <div className="w-full max-w-3xl mt-6 bg-white p-4 border rounded-lg shadow text-sm sm:text-base whitespace-pre-line">
-          {result}
+          <button
+            onClick={generateUsernames}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+          >
+            Generate Usernames
+          </button>
         </div>
-      )}
+
+        {results.length > 0 && (
+          <div className="mt-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-2">
+              Suggestions
+            </h2>
+
+            <div className="space-y-2">
+              {results.map((r, i) => (
+                <div
+                  key={i}
+                  className="border rounded-md px-3 py-2 text-sm bg-gray-50"
+                >
+                  {r}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
