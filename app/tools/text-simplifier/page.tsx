@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 
-export default function TextSimplifier() {
+export default function TextSimplifierPage() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSimplify() {
+  async function handleConvert() {
     if (!input.trim()) return;
-
     setLoading(true);
     setOutput("");
 
@@ -20,7 +19,7 @@ export default function TextSimplifier() {
         messages: [
           {
             role: "user",
-            content: `Simplify this text in easy words:\n${input}`
+            content: `Rewrite this text into very simple language with numbered points:\n${input}`
           }
         ]
       })
@@ -32,47 +31,40 @@ export default function TextSimplifier() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
-      
-      {/* SEO Title Section */}
-      <h1 className="text-3xl font-bold text-blue-600 mb-2">
-        Text Simplifier Tool
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex flex-col items-center px-4 py-6">
+
+      {/* Header */}
+      <h1 className="text-2xl sm:text-3xl font-bold text-purple-700 mb-2">
+        Simple Text Converter
       </h1>
-      <p className="text-gray-600 mb-6 text-center max-w-xl">
-        Paste any text and convert it into simple, easy-to-understand language.
+      <p className="text-sm sm:text-base text-gray-700 text-center mb-6">
+        Turn difficult text into easy-to-read numbered points.
       </p>
 
-      {/* Input */}
-      <textarea
-        className="w-full max-w-2xl border rounded-lg p-3 h-40 mb-4"
-        placeholder="Paste your text here..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-      />
+      {/* Input Card */}
+      <div className="w-full max-w-3xl bg-white p-4 rounded-xl shadow">
+        <textarea
+          className="w-full p-3 border rounded-lg text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-purple-500"
+          rows={6}
+          placeholder="Enter text to simplify..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
 
-      <button
-        onClick={handleSimplify}
-        className="bg-blue-600 text-white px-6 py-2 rounded-lg mb-6"
-        disabled={loading}
-      >
-        {loading ? "Simplifying..." : "Simplify Text"}
-      </button>
+        <button
+          onClick={handleConvert}
+          className="mt-3 w-full bg-purple-600 text-white py-2 rounded-lg font-medium hover:bg-purple-700 transition"
+        >
+          {loading ? "Working..." : "Convert"}
+        </button>
+      </div>
 
-      {/* Output */}
+      {/* Output Card */}
       {output && (
-        <div className="w-full max-w-2xl bg-white border rounded-lg p-4">
-          <h2 className="font-semibold mb-2">Simplified Text:</h2>
-          <p className="whitespace-pre-line text-gray-800">{output}</p>
+        <div className="w-full max-w-3xl mt-6 bg-white p-4 rounded-xl shadow text-sm sm:text-base whitespace-pre-line">
+          {output}
         </div>
       )}
-
-      {/* Link back to main chat */}
-      <a
-        href="/"
-        className="mt-6 text-blue-600 underline"
-      >
-        Try full SimpGPT Chat →
-      </a>
     </div>
   );
 }

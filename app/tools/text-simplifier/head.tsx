@@ -1,8 +1,10 @@
 export default function Head() {
   return (
     <>
-      <title>Text Simplifier – Make Text Easy to Understand | SimpGPT</title>
-      <meta name="description" content="Free online text simplifier. Convert complex text into simple and easy language instantly." />
+      <title>Simple Text Converter - SimpGPT</title>
+      <meta name="description" content="Convert complex text into simple numbered explanations instantly using SimpGPT Text Simplifier tool." />
+      <meta name="keywords" content="text simplifier, explain text, simple explanation, AI simplifier" />
+      <link rel="canonical" href="https://www.simpgpt.in/tools/text-simplifier" />
     </>
   );
 }
