@@ -7,7 +7,7 @@ const socialMediaPlatforms = [
   { 
     id: "instagram", 
     name: "Instagram", 
-    icon: "📷", 
+    icon: "💎", 
     gradient: "from-purple-500 via-pink-500 to-orange-500",
     rules: "Short, aesthetic, memorable. Can use dots and underscores."
   },
@@ -68,7 +68,7 @@ export default function UsernameGenerator() {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState("instagram");
-  const [selectedGender, setSelectedGender] = useState<"boy" | "girl" | "unisex">("unisex");
+  const [selectedGender, setSelectedGender] = useState<"boy" | "girl">("boy");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [showPlatforms, setShowPlatforms] = useState(true);
 
@@ -157,7 +157,7 @@ export default function UsernameGenerator() {
                 >
                   <div className={`absolute inset-0 bg-gradient-to-br ${platform.gradient} opacity-90`}></div>
                   <div className="relative">
-                    <div className="text-2xl sm:text-3xl mb-1">{platform.icon}</div>
+                    <div className="text-3xl sm:text-4xl mb-1">{platform.icon}</div>
                     <div className="text-white text-[10px] sm:text-xs font-semibold leading-tight">
                       {platform.name}
                     </div>
@@ -175,7 +175,7 @@ export default function UsernameGenerator() {
           {selectedPlatformData && (
             <div className={`bg-gradient-to-r ${selectedPlatformData.gradient} p-3 sm:p-4 rounded-xl text-white text-xs sm:text-sm mb-4`}>
               <div className="flex items-start gap-2">
-                <span className="text-xl sm:text-2xl flex-shrink-0">{selectedPlatformData.icon}</span>
+                <span className="text-2xl sm:text-3xl flex-shrink-0">{selectedPlatformData.icon}</span>
                 <div>
                   <div className="font-bold mb-1">{selectedPlatformData.name}</div>
                   <div className="text-white/90 text-[10px] sm:text-xs leading-relaxed">
@@ -203,7 +203,7 @@ export default function UsernameGenerator() {
             <div className="flex gap-2 justify-center sm:justify-start">
               <button
                 onClick={() => setSelectedGender("boy")}
-                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-2xl transition-all ${
+                className={`flex-1 sm:flex-none px-6 sm:px-8 py-2.5 rounded-xl text-2xl transition-all ${
                   selectedGender === "boy"
                     ? 'bg-blue-500 shadow-lg ring-4 ring-blue-200 scale-105'
                     : 'bg-gray-100 hover:bg-gray-200 active:scale-95'
@@ -214,7 +214,7 @@ export default function UsernameGenerator() {
               </button>
               <button
                 onClick={() => setSelectedGender("girl")}
-                className={`flex-1 sm:flex-none px-4 sm:px-5 py-2.5 rounded-xl text-2xl transition-all ${
+                className={`flex-1 sm:flex-none px-6 sm:px-8 py-2.5 rounded-xl text-2xl transition-all ${
                   selectedGender === "girl"
                     ? 'bg-pink-500 shadow-lg ring-4 ring-pink-200 scale-105'
                     : 'bg-gray-100 hover:bg-gray-200 active:scale-95'
@@ -243,7 +243,7 @@ export default function UsernameGenerator() {
             </span>
           ) : (
             <span className="flex items-center justify-center gap-2">
-              <span>{selectedPlatformData?.icon}</span>
+              <span className="text-xl sm:text-2xl">{selectedPlatformData?.icon}</span>
               <span className="truncate">
                 {keyword.trim() ? "Generate Usernames" : "Generate Random"}
               </span>
