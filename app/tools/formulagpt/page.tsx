@@ -270,9 +270,11 @@ export default function FormulaGPT() {
                         <p className="text-gray-900 font-semibold text-sm sm:text-base mb-2">
                           {item.formula}
                         </p>
-                        <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
-                          {item.explanation}
-                        </p>
+                        {item.explanation && (
+                          <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
+                            {item.explanation}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <button

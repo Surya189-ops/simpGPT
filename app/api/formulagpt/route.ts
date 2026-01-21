@@ -10,8 +10,40 @@ export async function POST(req: Request) {
   try {
     const { topic, subject, exam, subjectName, examName } = await req.json();
 
-    // Generate Important Formulas with Explanations
-    const importantPrompt = `
+    const isMathematics = subject === "mathematics";
+
+    // Generate Important Formulas
+    const importantPrompt = isMathematics ? `
+You are FormulaGPT, an expert mathematics formula provider.
+
+Subject: ${subjectName}
+Exam Level: ${examName}
+Topic: ${topic}
+
+Give the MOST IMPORTANT mathematics formulas for this topic.
+
+CRITICAL: For Mathematics, give ONLY formulas, NO explanations, NO variable descriptions.
+
+FORMAT:
+1. Formula only (one line)
+2. Formula only (one line)
+3. Formula only (one line)
+
+EXAMPLE:
+1. (a + b)² = a² + 2ab + b²
+2. (a - b)² = a² - 2ab + b²
+3. a² - b² = (a + b)(a - b)
+
+RULES:
+1. Give 10-15 MOST IMPORTANT formulas only
+2. Each formula on ONE line only
+3. NO explanations, NO "where", NO variable descriptions
+4. Number each formula (1. 2. 3.)
+5. ONLY pure formulas
+6. NO markdown formatting
+
+Generate formulas now:
+` : `
 You are FormulaGPT, an expert academic formula provider for JEE, NEET, board exams, and general math and science.
 
 Subject: ${subjectName}
@@ -86,22 +118,33 @@ Generate ALL formulas now:
       })
     ]);
 
-    // Parse Important Formulas (with explanations)
     const importantText = importantResponse.choices[0]?.message?.content || "";
     const importantLines = importantText.split("\n").map(line => line.trim()).filter(line => line.length > 0);
     
-    const formulas = [];
-    for (let i = 0; i < importantLines.length; i++) {
-      const line = importantLines[i];
-      if (/^\d+\./.test(line)) {
-        const formula = line.replace(/^\d+\.\s*/, '');
-        const nextLine = importantLines[i + 1];
-        const explanation = nextLine && nextLine.toLowerCase().startsWith('where') 
-          ? nextLine.replace(/^where\s*/i, '')
-          : '';
-        
-        formulas.push({ formula, explanation });
-        if (explanation) i++; // Skip the explanation line in next iteration
+    let formulas = [];
+
+    if (isMathematics) {
+      // For Mathematics: No explanations, just formulas
+      formulas = importantLines
+        .filter(line => /^\d+\./.test(line))
+        .map(line => ({
+          formula: line.replace(/^\d+\.\s*/, ''),
+          explanation: ''
+        }));
+    } else {
+      // For other subjects: Include explanations
+      for (let i = 0; i < importantLines.length; i++) {
+        const line = importantLines[i];
+        if (/^\d+\./.test(line)) {
+          const formula = line.replace(/^\d+\.\s*/, '');
+          const nextLine = importantLines[i + 1];
+          const explanation = nextLine && nextLine.toLowerCase().startsWith('where') 
+            ? nextLine.replace(/^where\s*/i, '')
+            : '';
+          
+          formulas.push({ formula, explanation });
+          if (explanation) i++; // Skip the explanation line in next iteration
+        }
       }
     }
 
