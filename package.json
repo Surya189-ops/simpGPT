@@ -8,10 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "next": "^15.3.0",
+    "openai": "^4.52.0",
     "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "openai": "^4.52.0"
+    "react-dom": "18.2.0"
   },
   "devDependencies": {
     "@types/node": "^20",

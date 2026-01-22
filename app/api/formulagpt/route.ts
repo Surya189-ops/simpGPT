@@ -1,10 +1,30 @@
 // app/api/formulagpt/route.ts
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+
+async function generateWithOpenAI(prompt: string, maxTokens: number) {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: maxTokens,
+    temperature: 0.3,
+  });
+  return completion.choices[0]?.message?.content || "";
+}
+
+async function generateWithGemini(prompt: string) {
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text();
+}
 
 export async function POST(req: Request) {
   try {
@@ -103,22 +123,48 @@ EXAMPLE FORMAT:
 Generate ALL formulas now:
 `;
 
-    const [importantResponse, allResponse] = await Promise.all([
-      openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: importantPrompt }],
-        max_tokens: 1000,
-        temperature: 0.3,
-      }),
-      openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: allPrompt }],
-        max_tokens: 800,
-        temperature: 0.3,
-      })
-    ]);
+    let importantText = "";
+    let allText = "";
 
-    const importantText = importantResponse.choices[0]?.message?.content || "";
+    try {
+      // Try OpenAI first
+      console.log("Attempting to use OpenAI...");
+      const [importantResponse, allResponse] = await Promise.all([
+        generateWithOpenAI(importantPrompt, 1000),
+        generateWithOpenAI(allPrompt, 800)
+      ]);
+      importantText = importantResponse;
+      allText = allResponse;
+      console.log("OpenAI succeeded");
+    } catch (openAIError: any) {
+      // Check if it's a rate limit or quota error
+      if (
+        openAIError?.status === 429 || 
+        openAIError?.code === 'insufficient_quota' ||
+        openAIError?.message?.includes('quota') ||
+        openAIError?.message?.includes('rate_limit')
+      ) {
+        console.log("OpenAI quota exhausted, switching to Gemini...");
+        
+        try {
+          // Fallback to Gemini
+          const [importantResponse, allResponse] = await Promise.all([
+            generateWithGemini(importantPrompt),
+            generateWithGemini(allPrompt)
+          ]);
+          importantText = importantResponse;
+          allText = allResponse;
+          console.log("Gemini succeeded");
+        } catch (geminiError) {
+          console.error("Gemini also failed:", geminiError);
+          throw new Error("Both OpenAI and Gemini failed. Please try again later.");
+        }
+      } else {
+        // If it's not a quota error, throw the original error
+        throw openAIError;
+      }
+    }
+
     const importantLines = importantText.split("\n").map(line => line.trim()).filter(line => line.length > 0);
     
     let formulas = [];
@@ -149,7 +195,6 @@ Generate ALL formulas now:
     }
 
     // Parse All Formulas (without explanations)
-    const allText = allResponse.choices[0]?.message?.content || "";
     const allFormulas = allText
       .split("\n")
       .map(line => line.trim())
@@ -158,8 +203,12 @@ Generate ALL formulas now:
 
     return NextResponse.json({ formulas, allFormulas });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("FormulaGPT API Error:", error);
-    return NextResponse.json({ formulas: [], allFormulas: [] }, { status: 500 });
+    return NextResponse.json({ 
+      formulas: [], 
+      allFormulas: [],
+      error: error?.message || "Failed to generate formulas. Please try again."
+    }, { status: 500 });
   }
 }
