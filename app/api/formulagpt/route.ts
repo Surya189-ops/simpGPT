@@ -30,73 +30,61 @@ export async function POST(req: Request) {
   try {
     const { topic, subject, exam, subjectName, examName } = await req.json();
 
-    const isMathematics = subject === "mathematics";
-
-    // Generate Important Formulas
-    const importantPrompt = isMathematics ? `
-You are FormulaGPT, an expert mathematics formula provider.
-
-Subject: ${subjectName}
-Exam Level: ${examName}
-Topic: ${topic}
-
-Give the MOST IMPORTANT mathematics formulas for this topic.
-
-CRITICAL: For Mathematics, give ONLY formulas, NO explanations, NO variable descriptions.
-
-FORMAT:
-1. Formula only (one line)
-2. Formula only (one line)
-3. Formula only (one line)
-
-EXAMPLE:
-1. (a + b)² = a² + 2ab + b²
-2. (a - b)² = a² - 2ab + b²
-3. a² - b² = (a + b)(a - b)
-
-RULES:
-1. Give 10-15 MOST IMPORTANT formulas only
-2. Each formula on ONE line only
-3. NO explanations, NO "where", NO variable descriptions
-4. Number each formula (1. 2. 3.)
-5. ONLY pure formulas
-6. NO markdown formatting
-
-Generate formulas now:
-` : `
+    // Generate Important Formulas with Tricks
+    const importantPrompt = `
 You are FormulaGPT, an expert academic formula provider for JEE, NEET, board exams, and general math and science.
 
 Subject: ${subjectName}
 Exam Level: ${examName}
 Topic: ${topic}
 
-Your job is to give the MOST IMPORTANT formulas with clear explanations.
+Give 8-12 MOST IMPORTANT formulas for this topic.
 
-FORMAT - MUST FOLLOW EXACTLY:
-For each formula, provide TWO lines:
-Line 1: The formula itself (clean, no explanations)
-Line 2: where [explain each variable clearly]
+CRITICAL FORMAT - MUST FOLLOW EXACTLY:
+Each formula MUST be followed immediately by its memory trick.
+Format:
+1. [Formula]
+Trick to remember: [Simple 1-2 line memory technique with real-life example]
+
+2. [Formula]
+Trick to remember: [Simple 1-2 line memory technique with real-life example]
 
 EXAMPLE:
-v = u + at
-where v is final velocity, u is initial velocity, a is acceleration, t is time
+1. v = u + at
+Trick to remember: Like a car accelerating on highway - your final speed = starting speed + how hard you push the gas (acceleration) over time
 
-s = ut + 0.5at²
-where s is displacement, u is initial velocity, t is time, a is acceleration
+2. s = ut + 0.5at²
+Trick to remember: Distance covered is like running at steady pace (ut) plus extra distance from speeding up (½at²) - imagine sprinting
 
-RULES:
-1. Give 8-12 MOST IMPORTANT formulas only
-2. Each formula must have TWO lines: formula then explanation
-3. Use "where" to start the explanation line
+3. (a + b)² = a² + 2ab + b²
+Trick to remember: Think of a square garden with sides (a+b) - you get 4 sections: two squares (a², b²) and two rectangles (ab each)
+
+4. PV = nRT
+Trick to remember: Picture a balloon (P pushes out, V expands) - more gas (n) or heat (T) makes it bigger, like heating popcorn
+
+RULES FOR TRICKS:
+- Keep each trick 1-2 lines maximum
+- Focus on HOW TO REMEMBER the formula using:
+  * Real-life examples or analogies (e.g., "Like a car speeding up", "Think of a pizza being cut")
+  * Mnemonic devices or word patterns (e.g., "SOH-CAH-TOA")
+  * Visual imagery or stories (e.g., "Imagine a stretching rubber band")
+  * Familiar everyday situations (sports, cooking, driving, etc.)
+- Make it relatable and memorable
+- NO technical explanations or derivations
+- NO variable definitions (NO "where u is...")
+
+RULES FOR FORMULAS:
+1. Give 8-12 formulas
+2. EVERY formula MUST have a trick on the next line
+3. NO variable definitions anywhere
 4. Number each formula (1. 2. 3.)
-5. Keep explanations simple and student-friendly
-6. NO markdown, NO bullets, NO fancy formatting
-7. Focus on exam-critical formulas only
+5. NO markdown formatting
+6. Start each trick with "Trick to remember:"
 
-Generate the most important formulas now:
+Generate formulas with tricks now:
 `;
 
-    // Generate All Formulas without Explanations
+    // Generate All Formulas (without tricks)
     const allPrompt = `
 You are FormulaGPT, an expert academic formula provider.
 
@@ -109,7 +97,7 @@ Give ALL possible formulas for this topic (comprehensive list).
 RULES:
 1. List ALL formulas related to this topic (15-25 formulas)
 2. Each formula on ONE line only
-3. NO explanations, NO variable descriptions
+3. NO explanations, NO tricks, NO variable descriptions
 4. Number each formula (1. 2. 3.)
 5. Include basic, intermediate, and advanced formulas
 6. Include derived formulas and special cases
@@ -130,8 +118,8 @@ Generate ALL formulas now:
       // Try OpenAI first
       console.log("Attempting to use OpenAI...");
       const [importantResponse, allResponse] = await Promise.all([
-        generateWithOpenAI(importantPrompt, 1000),
-        generateWithOpenAI(allPrompt, 800)
+        generateWithOpenAI(importantPrompt, 1500),
+        generateWithOpenAI(allPrompt, 1000)
       ]);
       importantText = importantResponse;
       allText = allResponse;
@@ -165,43 +153,92 @@ Generate ALL formulas now:
       }
     }
 
+    // Parse Important Formulas with Tricks
     const importantLines = importantText.split("\n").map(line => line.trim()).filter(line => line.length > 0);
     
     let formulas = [];
 
-    if (isMathematics) {
-      // For Mathematics: No explanations, just formulas
-      formulas = importantLines
-        .filter(line => /^\d+\./.test(line))
-        .map(line => ({
-          formula: line.replace(/^\d+\.\s*/, ''),
-          explanation: ''
-        }));
-    } else {
-      // For other subjects: Include explanations
+    for (let i = 0; i < importantLines.length; i++) {
+      const line = importantLines[i];
+      
+      // Check if line starts with a number (formula line)
+      if (/^\d+\./.test(line)) {
+        const formula = line.replace(/^\d+\.\s*/, '');
+        
+        // Look for trick in next few lines
+        let trick = '';
+        for (let j = i + 1; j < Math.min(i + 4, importantLines.length); j++) {
+          const nextLine = importantLines[j];
+          
+          // Check if this line contains a trick
+          if (nextLine.toLowerCase().includes('trick') || 
+              nextLine.toLowerCase().includes('remember') ||
+              nextLine.includes('💡')) {
+            trick = nextLine
+              .replace(/^(💡\s*)?trick to remember:\s*/i, '')
+              .replace(/^trick:\s*/i, '')
+              .replace(/^remember:\s*/i, '')
+              .trim();
+            i = j; // Skip to this line
+            break;
+          }
+          
+          // If we hit another numbered formula, stop looking
+          if (/^\d+\./.test(nextLine)) {
+            i = j - 1; // Go back one so we don't skip the next formula
+            break;
+          }
+          
+          // If it's not a trick indicator and not a formula, it might be the trick itself
+          if (!(/^\d+\./.test(nextLine)) && nextLine.length > 10) {
+            trick = nextLine.trim();
+            i = j;
+            break;
+          }
+        }
+        
+        formulas.push({ formula, trick });
+      }
+    }
+
+    // Fallback: If no tricks were found at all, try simpler parsing
+    if (formulas.length > 0 && formulas.every(f => !f.trick)) {
+      console.log("No tricks found with complex parsing, trying simple approach...");
+      formulas = [];
+      
       for (let i = 0; i < importantLines.length; i++) {
         const line = importantLines[i];
         if (/^\d+\./.test(line)) {
           const formula = line.replace(/^\d+\.\s*/, '');
-          const nextLine = importantLines[i + 1];
-          const explanation = nextLine && nextLine.toLowerCase().startsWith('where') 
-            ? nextLine.replace(/^where\s*/i, '')
+          const nextLine = i + 1 < importantLines.length ? importantLines[i + 1] : '';
+          
+          // If next line doesn't start with a number, it's probably the trick
+          const trick = nextLine && !(/^\d+\./.test(nextLine))
+            ? nextLine
+                .replace(/^(💡\s*)?trick to remember:\s*/i, '')
+                .replace(/^trick:\s*/i, '')
+                .trim()
             : '';
           
-          formulas.push({ formula, explanation });
-          if (explanation) i++; // Skip the explanation line in next iteration
+          formulas.push({ formula, trick });
+          if (trick && nextLine) i++; // Skip the trick line
         }
       }
     }
 
-    // Parse All Formulas (without explanations)
+    // Parse All Formulas (without tricks)
     const allFormulas = allText
       .split("\n")
       .map(line => line.trim())
       .filter(line => line.length > 0 && /^\d+\./.test(line))
       .map(line => line.replace(/^\d+\.\s*/, ''));
 
-    return NextResponse.json({ formulas, allFormulas });
+    console.log(`Generated ${formulas.length} formulas with tricks, ${allFormulas.length} total formulas`);
+
+    return NextResponse.json({ 
+      formulas, 
+      allFormulas
+    });
 
   } catch (error: any) {
     console.error("FormulaGPT API Error:", error);

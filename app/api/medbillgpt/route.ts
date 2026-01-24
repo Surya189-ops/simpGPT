@@ -1,10 +1,8 @@
 // app/api/medbillgpt/route.ts
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: Request) {
   try {
@@ -14,35 +12,29 @@ export async function POST(req: Request) {
 
     let billContent = billText || "";
 
-    // If image is uploaded, extract text using GPT-4 Vision
+    // If image is uploaded, extract text using Gemini Vision
     if (file) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
       const base64Image = buffer.toString('base64');
       
-      const visionResponse = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Extract all text from this medical bill image. List every charge, amount, date, and detail you can see. Format it clearly."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${file.type};base64,${base64Image}`
-                }
-              }
-            ]
+      // Determine the mime type
+      const mimeType = file.type;
+      
+      const visionModel = genAI.getGenerativeModel({ model: "gemini-pro-vision" });
+      
+      const visionResult = await visionModel.generateContent([
+        "Extract all text from this medical bill image. List every charge, amount, date, and detail you can see. Format it clearly.",
+        {
+          inlineData: {
+            data: base64Image,
+            mimeType: mimeType
           }
-        ],
-        max_tokens: 1000,
-      });
+        }
+      ]);
 
-      const extractedText = visionResponse.choices[0]?.message?.content || "";
+      const visionResponse = await visionResult.response;
+      const extractedText = visionResponse.text();
       billContent = extractedText + "\n\n" + billText;
     }
 
@@ -96,14 +88,10 @@ ${billContent}
 Provide your explanation now:
 `;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 2000,
-      temperature: 0.5,
-    });
-
-    const explanation = completion.choices[0]?.message?.content || "";
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const explanation = response.text();
 
     return NextResponse.json({ explanation });
 

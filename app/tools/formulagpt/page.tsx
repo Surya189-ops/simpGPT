@@ -39,7 +39,7 @@ const examTypes = [
 
 export default function FormulaGPT() {
   const [topic, setTopic] = useState("");
-  const [formulas, setFormulas] = useState<Array<{formula: string, explanation: string}>>([]);
+  const [formulas, setFormulas] = useState<Array<{formula: string, trick: string}>>([]);
   const [allFormulas, setAllFormulas] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState("physics");
@@ -237,7 +237,7 @@ export default function FormulaGPT() {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                📌 Important Formulas ({formulas.length})
+                📌 Important Formulas
               </button>
               <button
                 onClick={() => setActiveTab("all")}
@@ -247,7 +247,7 @@ export default function FormulaGPT() {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                📚 All Formulas ({allFormulas.length})
+                📚 All Formulas
               </button>
             </div>
 
@@ -262,18 +262,25 @@ export default function FormulaGPT() {
                     key={i}
                     className="group bg-gradient-to-r from-gray-50 to-gray-100 hover:from-indigo-50 hover:to-purple-50 border border-gray-200 rounded-xl p-3 sm:p-4 transition-all duration-300 hover:shadow-md hover:border-indigo-300"
                   >
-                    <div className="flex items-start gap-2 sm:gap-3 mb-2">
+                    <div className="flex items-start gap-2 sm:gap-3 mb-3">
                       <span className="text-indigo-600 font-bold text-sm sm:text-base flex-shrink-0 mt-1">
                         {i + 1}.
                       </span>
                       <div className="flex-1">
-                        <p className="text-gray-900 font-semibold text-sm sm:text-base mb-2">
+                        <p className="text-gray-900 font-semibold text-sm sm:text-base mb-3">
                           {item.formula}
                         </p>
-                        {item.explanation && (
-                          <p className="text-gray-600 text-xs sm:text-sm leading-relaxed">
-                            {item.explanation}
-                          </p>
+                        
+                        {/* Trick to remember section */}
+                        {item.trick && (
+                          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-2 sm:p-3 rounded">
+                            <p className="text-yellow-900 font-semibold text-xs sm:text-sm mb-1">
+                              💡 Trick to remember:
+                            </p>
+                            <p className="text-yellow-800 text-xs sm:text-sm leading-relaxed">
+                              {item.trick}
+                            </p>
+                          </div>
                         )}
                       </div>
                     </div>
