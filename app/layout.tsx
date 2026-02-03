@@ -2,6 +2,7 @@
 
 import type { Metadata } from "next";
 import "./globals.css";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "SimpGPT - Ask anything",
@@ -16,7 +17,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        {/* NextAuth Session Provider (safe for all tools) */}
+        <Providers>{children}</Providers>
 
         {/* Google Analytics */}
         <script

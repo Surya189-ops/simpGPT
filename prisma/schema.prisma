@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =========================
+// ENUMS
+// =========================
+
+enum SubscriptionTier {
+  free
+  starter
+  pro
+}
+
+enum SubscriptionStatus {
+  inactive
+  active
+  canceled
+  expired
+}
+
+// =========================
+// MODELS
+// =========================
+
+model User {
+  id                  String   @id @default(cuid())
+  name                String?
+  email               String   @unique
+  emailVerified       DateTime?
+  password            String?
+  image               String?
+
+  // Subscription
+  subscriptionTier    SubscriptionTier   @default(free)
+  subscriptionStatus  SubscriptionStatus @default(inactive)
+  stripeCustomerId    String?  @unique
+  stripeSubId         String?  @unique
+  subscriptionEndDate DateTime?
+
+  // Usage tracking
+  searchCount         Int      @default(0)
+  lastSearchReset     DateTime @default(now())
+  lastSearchAt        DateTime?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  savedJobs           SavedJob[]
+
+  @@index([email])
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model SavedJob {
+  id              String   @id @default(cuid())
+  userId          String
+  jobId           String
+  jobTitle        String
+  jobCompany      String
+  jobLocation     String
+  jobUrl          String
+  jobSource       String
+  matchPercentage Int
+
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@index([userId])
+}
