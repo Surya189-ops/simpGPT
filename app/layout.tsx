@@ -7,6 +7,12 @@ import Providers from "./providers";
 export const metadata: Metadata = {
   title: "SimpGPT - Ask anything",
   description: "Learn faster with simple, accurate, and easy explanations.",
+  icons: {
+    icon: "/favicon.ico",
+    shortcut: "/favicon-16x16.png",
+    apple: "/apple-touch-icon.png",
+  },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
@@ -17,7 +23,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {/* NextAuth Session Provider (safe for all tools) */}
         <Providers>{children}</Providers>
 
         {/* Google Analytics */}
