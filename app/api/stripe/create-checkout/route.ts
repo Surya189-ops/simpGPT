@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-
+// 🚧 Guard FIRST (no Stripe import yet)
 export async function POST(req: Request) {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json(
+      { error: "Stripe not configured" },
+      { status: 503 }
+    );
+  }
+
+  // ✅ Import Stripe ONLY when key exists
+  const Stripe = (await import("stripe")).default;
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
   try {
     const session = await getServerSession(authOptions);
 
@@ -25,9 +34,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 💰 USD pricing (same tiers as Razorpay)
-    const amount =
-      planName === "pro" ? 1500 : 500; // cents
+    const amount = planName === "pro" ? 1500 : 500; // cents
 
     const checkoutSession =
       await stripe.checkout.sessions.create({
@@ -50,7 +57,7 @@ export async function POST(req: Request) {
         success_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment-success`,
         cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
         metadata: {
-          userId: session.user.id,   // 🔥 critical
+          userId: session.user.id,
           planName,
         },
       });
