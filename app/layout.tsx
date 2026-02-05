@@ -8,8 +8,10 @@ export const metadata: Metadata = {
   description: "Simple explanations, formulas, and tools powered by AI.",
   icons: {
     icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
