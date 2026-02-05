@@ -1,18 +1,15 @@
-// simpgpt/app/layout.tsx
-
+// app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "SimpGPT - Ask anything",
-  description: "Learn faster with simple, accurate, and easy explanations.",
+  title: "SimpGPT – Learn Anything Simply",
+  description: "Simple explanations, formulas, and tools powered by AI.",
   icons: {
     icon: "/favicon.ico",
-    shortcut: "/favicon-16x16.png",
     apple: "/apple-touch-icon.png",
   },
-  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
