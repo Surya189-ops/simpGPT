@@ -140,19 +140,32 @@ export default function SimpJobs() {
 
   const FREE_SAVE_LIMIT = 5;
 
-
   useEffect(() => {
-    if (!isLoggedIn) {
-      const count = localStorage.getItem("searchCount");
-      setSearchCount(count ? parseInt(count) : 0);
-      return;
+    if (!countryLoaded) return;
+
+    async function syncUsage() {
+      if (!isLoggedIn) {
+        const count = localStorage.getItem("searchCount");
+        setSearchCount(count ? parseInt(count) : 0);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/simpjobs/usage");
+        const data = await res.json();
+
+        if (typeof data.searchCount === "number") {
+          setSearchCount(data.searchCount);
+        }
+      } catch {
+        if (session?.user?.searchCount !== undefined) {
+          setSearchCount(session.user.searchCount as number);
+        }
+      }
     }
 
-    if (session?.user?.searchCount !== undefined) {
-      setSearchCount(session.user.searchCount as number);
-    }
-  }, [isLoggedIn, session]);
-
+    syncUsage();
+  }, [isLoggedIn, countryLoaded]);
 
 
 
@@ -866,7 +879,7 @@ export default function SimpJobs() {
                   loading ||
                   !jobRole.trim() ||
                   (!isLoggedIn && searchCount >= GUEST_SEARCH_LIMIT) ||
-                  (isLoggedIn && subscriptionTier === "free" && searchCount >= 6)
+                  (isLoggedIn && subscriptionTier === "free" && searchCount >= 5)
                 }
                 className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               >
