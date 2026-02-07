@@ -346,7 +346,6 @@ export default function SimpJobs() {
           window.location.href = "/tools/simpjobs";
         }
 
-
         setShowOtpModal(false);
         setOtp("");
         setOtpEmail("");
