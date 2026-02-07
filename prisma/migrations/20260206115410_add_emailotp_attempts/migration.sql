@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "EmailOTP" ADD COLUMN     "attempts" INTEGER NOT NULL DEFAULT 0;

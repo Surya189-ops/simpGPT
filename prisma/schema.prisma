@@ -115,3 +115,18 @@ model SavedJob {
   @@unique([userId, jobId])
   @@index([userId])
 }
+
+// =========================
+// EMAIL OTP (NEW)
+// =========================
+
+model EmailOTP {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}

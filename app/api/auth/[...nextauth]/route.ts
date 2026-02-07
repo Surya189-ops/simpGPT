@@ -1,4 +1,3 @@
-// app/api/auth/[...nextauth]/route.ts
 import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -12,13 +11,14 @@ export const authOptions = {
   adapter: PrismaAdapter(prisma),
 
   providers: [
+    // ✅ GOOGLE LOGIN (UNCHANGED)
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
       allowDangerousEmailAccountLinking: true,
     }),
 
-
+    // ✅ EMAIL + PASSWORD LOGIN (OTP-PROTECTED)
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -28,30 +28,32 @@ export const authOptions = {
 
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error("Invalid credentials");
+          throw new Error("INVALID_CREDENTIALS");
         }
 
-        // Find user by email
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
 
-        // ❗ IMPORTANT FIX: use `password`, not `hashedPassword`
         if (!user || !user.password) {
-          throw new Error("Invalid credentials");
+          throw new Error("INVALID_CREDENTIALS");
         }
 
-        // Compare password
         const isCorrectPassword = await bcrypt.compare(
           credentials.password,
           user.password
         );
 
         if (!isCorrectPassword) {
-          throw new Error("Invalid credentials");
+          throw new Error("INVALID_CREDENTIALS");
         }
 
-        // Return safe user object
+        // 🚫 BLOCK LOGIN IF EMAIL NOT VERIFIED (OTP NOT CONFIRMED)
+        if (!user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED");
+        }
+
+        // ✅ SAFE USER OBJECT
         return {
           id: user.id,
           email: user.email,
@@ -77,7 +79,7 @@ export const authOptions = {
           subscriptionTier: true,
           subscriptionStatus: true,
           stripeCustomerId: true,
-          searchCount: true, // ✅ ADD THIS
+          searchCount: true,
         },
       });
 
@@ -87,12 +89,11 @@ export const authOptions = {
         token.subscriptionTier = dbUser.subscriptionTier;
         token.subscriptionStatus = dbUser.subscriptionStatus;
         token.stripeCustomerId = dbUser.stripeCustomerId;
-        token.searchCount = dbUser.searchCount; // ✅ ADD THIS
+        token.searchCount = dbUser.searchCount;
       }
 
       return token;
     },
-
 
     async session({ session, token }: any) {
       if (session.user) {
@@ -101,11 +102,10 @@ export const authOptions = {
         session.user.subscriptionTier = token.subscriptionTier;
         session.user.subscriptionStatus = token.subscriptionStatus;
         session.user.stripeCustomerId = token.stripeCustomerId;
-        session.user.searchCount = token.searchCount; // ✅ ADD THIS
+        session.user.searchCount = token.searchCount;
       }
       return session;
     },
-
   },
 
   pages: {

@@ -59,6 +59,18 @@ function getApplyLink(job: Job): string {
   }
 }
 
+function getNormalizedBarWidth(match: number) {
+  const min = 70;
+  const max = 100;
+  return Math.round(min + (match / 100) * (max - min));
+}
+
+function getMatchLabel(match: number) {
+  if (match >= 80) return "Excellent Match";
+  if (match >= 50) return "Strong Match";
+  return "Good Match";
+}
+
 function formatSourceName(source: string) {
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
@@ -79,6 +91,20 @@ export default function SimpJobs() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendTimer, setResendTimer] = useState(60);
+  const [resending, setResending] = useState(false);
+  const [otpMessage, setOtpMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [forgotStep, setForgotStep] = useState<"email" | "otp">("email");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [activeView, setActiveView] = useState<"search" | "saved" | "resume">("search");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [country, setCountry] = useState<"IN" | "GLOBAL">("GLOBAL");
@@ -88,6 +114,8 @@ export default function SimpJobs() {
   const [resumeUploading, setResumeUploading] = useState(false);
   const [editingLocation, setEditingLocation] = useState(false);
   const [customLocation, setCustomLocation] = useState("");
+  const [verifiedPassword, setVerifiedPassword] = useState("");
+
 
   const jobSites = useMemo(() => {
     return [
@@ -216,6 +244,25 @@ export default function SimpJobs() {
     loadResumeData();
   }, [isLoggedIn, isPro]);
 
+  useEffect(() => {
+    if (!showOtpModal) return;
+
+    setResendTimer(60);
+    setOtpMessage(null);
+
+    const interval = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [showOtpModal]);
+
 
 
   async function handleRegister(e: React.FormEvent) {
@@ -235,24 +282,180 @@ export default function SimpJobs() {
         return;
       }
 
-      // Auto login after registration
-      const result = await signIn("credentials", {
-        email: registerData.email,
-        password: registerData.password,
-        redirect: false,
-      });
+      // ✅ FIXED: Show OTP modal instead of auto-login
+      setVerifiedPassword(registerData.password);
+      setOtpEmail(registerData.email);
+      setShowRegisterModal(false);
+      setShowOtpModal(true);
 
-      if (result?.ok) {
-        setShowRegisterModal(false);
-        setRegisterData({ name: "", email: "", password: "" });
-      } else {
-        alert("Registration successful! Please login.");
-        setShowRegisterModal(false);
-        setShowLoginModal(true);
-      }
+      // clear form but keep password separately
+      setRegisterData({ name: "", email: registerData.email, password: "" });
+
+
     } catch (error) {
       console.error("Registration error:", error);
       alert("Something went wrong. Please try again.");
+    }
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (!otp.trim()) {
+      setOtpMessage({ type: "error", text: "Please enter the OTP" });
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpMessage(null);
+
+    try {
+      const response = await fetch("/api/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: otpEmail,
+          otp: otp.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setOtpMessage({ type: "error", text: data.error || "Invalid OTP. Please try again." });
+        setOtpLoading(false);
+        return;
+      }
+
+      // ✅ OTP verified successfully
+      // ✅ OTP verified successfully
+      setOtpMessage({ type: "success", text: "Email verified successfully!" });
+      setOtpLoading(false); // ✅ FIX: reset loading state
+
+      setTimeout(async () => {
+        // 🔐 Auto-login user after OTP verification
+        const result = await signIn("credentials", {
+          email: otpEmail,
+          password: verifiedPassword,
+          redirect: false,
+        });
+
+        if (result?.ok) {
+          await update();
+          setVerifiedPassword("");
+          window.location.href = "/tools/simpjobs";
+        }
+
+
+        setShowOtpModal(false);
+        setOtp("");
+        setOtpEmail("");
+        setOtpMessage(null);
+      }, 1500);
+
+
+    } catch (error) {
+      console.error("OTP verification error:", error);
+      setOtpMessage({ type: "error", text: "Verification failed. Please try again." });
+      setOtpLoading(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    setResending(true);
+    setOtpMessage(null);
+
+    try {
+      const res = await fetch("/api/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: otpEmail }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setOtpMessage({ type: "error", text: data.error || "Failed to resend OTP" });
+        setResending(false);
+        return;
+      }
+
+      // Use backend cooldown if provided, otherwise default to 60
+      const cooldown = data.cooldown ?? 60;
+      setResendTimer(cooldown);
+      setOtpMessage({ type: "success", text: "New OTP sent to your email 📩" });
+    } catch {
+      setOtpMessage({ type: "error", text: "Something went wrong" });
+    } finally {
+      setResending(false);
+    }
+  }
+
+  async function handleForgotPasswordRequest(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotMessage(null);
+
+    try {
+      const res = await fetch("/api/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setForgotMessage({ type: "error", text: data.error || "Failed to send OTP" });
+        return;
+      }
+
+      setForgotStep("otp");
+      setForgotMessage({ type: "success", text: "OTP sent to your email 📩" });
+    } catch {
+      setForgotMessage({ type: "error", text: "Something went wrong" });
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  async function handleResetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotMessage(null);
+
+    try {
+      const res = await fetch("/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: forgotEmail,
+          otp: forgotOtp,
+          password: newPassword,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setForgotMessage({ type: "error", text: data.error || "Invalid OTP" });
+        return;
+      }
+
+      setForgotMessage({ type: "success", text: "Password reset successfully 🎉" });
+
+      setTimeout(() => {
+        setShowForgotModal(false);
+        setShowLoginModal(true);
+        setForgotEmail("");
+        setForgotOtp("");
+        setNewPassword("");
+        setForgotStep("email");
+        setForgotMessage(null);
+      }, 1000);
+
+    } catch {
+      setForgotMessage({ type: "error", text: "Something went wrong" });
+    } finally {
+      setForgotLoading(false);
     }
   }
 
@@ -993,12 +1196,13 @@ export default function SimpJobs() {
                         )}
                         <div className="flex items-center gap-2 mb-1">
                           <div className="text-xs sm:text-sm font-semibold text-blue-600">
-                            {job.matchPercentage}% Match
+                            {getMatchLabel(job.matchPercentage)}
                           </div>
+
                           <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
                             <div
                               className="bg-gradient-to-r from-blue-500 to-green-500 h-full rounded-full transition-all duration-500"
-                              style={{ width: `${job.matchPercentage}%` }}
+                              style={{ width: `${getNormalizedBarWidth(job.matchPercentage)}%` }}
                             ></div>
                           </div>
                         </div>
@@ -1424,6 +1628,16 @@ export default function SimpJobs() {
                 className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <button
+                type="button"
+                onClick={() => {
+                  setShowLoginModal(false);
+                  setShowForgotModal(true);
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold text-left"
+              >
+                Forgot password?
+              </button>
+              <button
                 type="submit"
                 className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm sm:text-base font-bold rounded-xl hover:shadow-lg transition-all"
               >
@@ -1565,6 +1779,213 @@ export default function SimpJobs() {
                 support@simpjobs.in
               </a>
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* OTP Verification Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="text-4xl sm:text-5xl mb-4">✉️</div>
+              <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">
+                Verify Your Email
+              </h3>
+              <p className="text-sm sm:text-base text-gray-600">
+                Enter the OTP sent to
+              </p>
+              <p className="text-sm sm:text-base font-semibold text-gray-900 mt-1">
+                {otpEmail}
+              </p>
+            </div>
+
+            {/* Inline Message */}
+            {otpMessage && (
+              <div
+                className={`mb-4 p-3 rounded-lg text-sm ${otpMessage.type === "success"
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+              >
+                {otpMessage.text}
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyOtp} className="space-y-4 mb-6">
+              <input
+                type="text"
+                placeholder="Enter OTP"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                required
+                maxLength={6}
+                disabled={otpLoading}
+                className="w-full px-4 py-3 text-sm sm:text-base text-center border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-widest font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                type="submit"
+                disabled={otpLoading}
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm sm:text-base font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {otpLoading ? "Verifying..." : "Verify OTP"}
+              </button>
+            </form>
+
+            <div className="text-center mb-4">
+              {resendTimer > 0 ? (
+                <p className="text-sm text-gray-500">
+                  Resend OTP in {resendTimer}s
+                </p>
+              ) : (
+                <button
+                  onClick={handleResendOtp}
+                  disabled={resending}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {resending ? "Sending..." : "Resend OTP"}
+                </button>
+              )}
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setShowOtpModal(false);
+                  setOtp("");
+                  setOtpEmail("");
+                  setOtpMessage(null);
+                }}
+                disabled={otpLoading}
+                className="text-gray-500 hover:text-gray-700 text-sm font-semibold disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+
+            <p className="text-xs text-center text-gray-500 mt-4">
+              Didn't receive the OTP? Check your spam folder or contact{" "}
+              <a
+                href="mailto:support@simpjobs.in"
+                className="text-blue-600 hover:text-blue-700 font-semibold"
+              >
+                support@simpjobs.in
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+            <div className="text-center mb-6">
+              <div className="text-4xl sm:text-5xl mb-3">🔐</div>
+              <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-2">
+                Reset Password
+              </h3>
+              <p className="text-sm text-gray-600">
+                {forgotStep === "email"
+                  ? "Enter your email to receive an OTP"
+                  : "Enter the OTP sent to your email"}
+              </p>
+            </div>
+
+            {forgotMessage && (
+              <div
+                className={`mb-4 p-3 rounded-lg text-sm ${forgotMessage.type === "success"
+                  ? "bg-green-50 text-green-700 border border-green-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+              >
+                {forgotMessage.text}
+              </div>
+            )}
+
+            {forgotStep === "email" ? (
+              <form onSubmit={handleForgotPasswordRequest} className="space-y-4 mb-6">
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                  disabled={forgotLoading}
+                  className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm sm:text-base font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {forgotLoading ? "Sending..." : "Send OTP"}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleResetPassword} className="space-y-4 mb-6">
+                <input
+                  type="text"
+                  placeholder="Enter OTP"
+                  value={forgotOtp}
+                  onChange={(e) => setForgotOtp(e.target.value)}
+                  required
+                  maxLength={6}
+                  disabled={forgotLoading}
+                  className="w-full px-4 py-3 text-sm sm:text-base text-center border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-widest font-semibold disabled:opacity-50"
+                />
+                <input
+                  type="password"
+                  placeholder="New password (min. 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  disabled={forgotLoading}
+                  className="w-full px-4 py-3 text-sm sm:text-base border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={forgotLoading}
+                  className="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm sm:text-base font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {forgotLoading ? "Resetting..." : "Reset Password"}
+                </button>
+              </form>
+            )}
+
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setShowForgotModal(false);
+                  setShowLoginModal(true);
+                  setForgotEmail("");
+                  setForgotOtp("");
+                  setNewPassword("");
+                  setForgotStep("email");
+                  setForgotMessage(null);
+                }}
+                disabled={forgotLoading}
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold disabled:opacity-50 mb-4"
+              >
+                Back to Login
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowForgotModal(false);
+                setForgotEmail("");
+                setForgotOtp("");
+                setNewPassword("");
+                setForgotStep("email");
+                setForgotMessage(null);
+              }}
+              disabled={forgotLoading}
+              className="w-full py-2 text-gray-500 hover:text-gray-700 text-sm font-semibold disabled:opacity-50"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

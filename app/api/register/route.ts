@@ -1,9 +1,10 @@
-// app/api/register/route.ts
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { Resend } from "resend";
 
 const prisma = new PrismaClient();
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check if user already exists
+    // 🔍 Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -28,29 +29,80 @@ export async function POST(req: Request) {
       );
     }
 
-    // Hash password
+    // ⛔ OTP rate limit (1 per 60 seconds)
+    const recentOtp = await prisma.emailOTP.findFirst({
+      where: {
+        email,
+        createdAt: {
+          gt: new Date(Date.now() - 60 * 1000),
+        },
+      },
+    });
+
+    if (recentOtp) {
+      return NextResponse.json(
+        { error: "Please wait 1 minute before requesting another OTP" },
+        { status: 429 }
+      );
+    }
+
+    // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user (IMPORTANT FIX HERE)
-    const user = await prisma.user.create({
+    // 👤 Create user (email NOT verified yet)
+    await prisma.user.create({
       data: {
         email,
         name,
-        password: hashedPassword, // ✅ FIXED
+        password: hashedPassword,
+        emailVerified: null,
         subscriptionTier: "free",
         subscriptionStatus: "inactive",
         searchCount: 0,
       },
     });
 
+    // 🔢 Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // 🧹 Remove old OTPs
+    await prisma.emailOTP.deleteMany({
+      where: { email },
+    });
+
+    // 💾 Save OTP (valid for 10 minutes)
+    await prisma.emailOTP.create({
+      data: {
+        email,
+        code: otp,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
+
+    // 📧 Send OTP email
+    await resend.emails.send({
+      from: "SimpJobs <no-reply@simpgpt.in>",
+      to: email,
+      subject: "Your SimpJobs verification code",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height:1.6">
+          <h2>Verify your email</h2>
+          <p>Use the OTP below to activate your SimpJobs account:</p>
+          <div style="font-size:28px;font-weight:bold;letter-spacing:4px;margin:16px 0">
+            ${otp}
+          </div>
+          <p>This code expires in <strong>10 minutes</strong>.</p>
+          <p style="font-size:12px;color:#666">
+            If you didn’t create this account, you can safely ignore this email.
+          </p>
+        </div>
+      `,
+    });
+
     return NextResponse.json(
       {
-        message: "User created successfully",
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-        },
+        success: true,
+        message: "OTP sent to email. Please verify to continue.",
       },
       { status: 201 }
     );
