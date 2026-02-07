@@ -360,6 +360,8 @@ export default function SimpJobs() {
     }
   }
 
+
+  
   async function handleResendOtp() {
     setResending(true);
     setOtpMessage(null);
