@@ -59,6 +59,7 @@ export default function PricingModal({
               <span>Memory tricks for all subjects</span>
             </li>
           </ul>
+          
 
           <button
             onClick={() => {
