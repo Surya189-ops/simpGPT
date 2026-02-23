@@ -108,7 +108,7 @@ export default function SimpJobs() {
   const [activeView, setActiveView] = useState<"search" | "saved" | "resume">("search");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [country, setCountry] = useState<"IN" | "GLOBAL">("GLOBAL");
-  const [countryLoaded, setCountryLoaded] = useState(false);
+
   const [resumeData, setResumeData] = useState<any>(null);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [resumeUploading, setResumeUploading] = useState(false);
@@ -133,20 +133,6 @@ export default function SimpJobs() {
   }, [country]);
 
 
-  useEffect(() => {
-    fetch("https://ipapi.co/json/")
-      .then(res => res.json())
-      .then(data => {
-        if (data?.country_code === "IN") {
-          setCountry("IN");
-        } else {
-          setCountry("GLOBAL");
-        }
-      })
-      .finally(() => {
-        setCountryLoaded(true);
-      });
-  }, []);
   // Registration form state
   const [registerData, setRegisterData] = useState({
     name: "",
@@ -160,6 +146,18 @@ export default function SimpJobs() {
     password: "",
   });
 
+  useEffect(() => {
+    const wrapper = document.querySelector("[data-country]");
+    const detected = wrapper?.getAttribute("data-country");
+
+    if (detected === "IN") {
+      setCountry("IN");
+    } else {
+      setCountry("GLOBAL");
+    }
+  }, []);
+
+
   const isLoggedIn = status === "authenticated";
   const subscriptionTier =
     (session?.user?.subscriptionTier as "free" | "starter" | "pro") || "free";
@@ -169,7 +167,6 @@ export default function SimpJobs() {
   const FREE_SAVE_LIMIT = 5;
 
   useEffect(() => {
-    if (!countryLoaded) return;
 
     async function syncUsage() {
       if (!isLoggedIn) {
@@ -193,8 +190,7 @@ export default function SimpJobs() {
     }
 
     syncUsage();
-  }, [isLoggedIn, countryLoaded]);
-
+  }, [isLoggedIn]);
 
 
   useEffect(() => {
@@ -361,7 +357,7 @@ export default function SimpJobs() {
   }
 
 
-  
+
   async function handleResendOtp() {
     setResending(true);
     setOtpMessage(null);
@@ -506,8 +502,8 @@ export default function SimpJobs() {
 
       const amount =
         planName === "starter"
-          ? 199 * 100
-          : 399 * 100;
+          ? 49 * 100    // ₹49 Starter
+          : 99 * 100;   // ₹99 Pro
 
 
       // starter = ₹299, pro = $19 equivalent (adjust later)
@@ -796,13 +792,6 @@ export default function SimpJobs() {
   }
 
 
-  if (!countryLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-white">
-        Detecting location…
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
@@ -2010,7 +1999,7 @@ export default function SimpJobs() {
               <div className="border-2 border-gray-200 rounded-xl p-4 sm:p-6 hover:border-blue-500 transition-all">
                 <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Starter</h4>
                 <div className="text-2xl sm:text-3xl font-black text-gray-900 mb-4">
-                  {country === "IN" ? "₹199" : "$4"}
+                  {country === "IN" ? "₹49" : "$4"}
                   <span className="text-xs sm:text-sm text-gray-500 font-normal">/month</span>
                 </div>
 
@@ -2064,7 +2053,7 @@ export default function SimpJobs() {
                 </div>
                 <h4 className="text-base sm:text-lg font-bold text-gray-900 mb-2">Pro</h4>
                 <div className="text-2xl sm:text-3xl font-black text-gray-900 mb-4">
-                  {country === "IN" ? "₹399" : "$19"}
+                  {country === "IN" ? "₹99" : "$19"}
                   <span className="text-xs sm:text-sm text-gray-500 font-normal">/month</span>
                 </div>
 

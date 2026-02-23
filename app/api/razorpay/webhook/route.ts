@@ -1,35 +1,35 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { PrismaClient } from "@prisma/client";
+import { createClient } from "@supabase/supabase-js";
 
 const prisma = new PrismaClient();
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 export async function POST(req: Request) {
   try {
-    // 1️⃣ Read raw body (important for signature verification)
     const body = await req.text();
-
-    // 2️⃣ Get Razorpay signature
     const signature = req.headers.get("x-razorpay-signature");
+
     if (!signature) {
       return NextResponse.json({ error: "No signature" }, { status: 400 });
     }
 
-    // 3️⃣ Verify signature
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET!)
       .update(body)
       .digest("hex");
 
     if (signature !== expectedSignature) {
-      console.error("❌ Invalid webhook signature");
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
-    // 4️⃣ Parse event AFTER verification
     const event = JSON.parse(body);
 
-    // 5️⃣ Handle valid payment events
     if (
       event.event === "payment.captured" ||
       event.event === "order.paid"
@@ -37,37 +37,58 @@ export async function POST(req: Request) {
       const payment = event.payload.payment?.entity;
       const order = event.payload.order?.entity;
 
-      // 🔥 Get userId from Razorpay notes
-      const userId =
-        payment?.notes?.userId ||
-        order?.notes?.userId;
+      const notes = payment?.notes || order?.notes;
+      const userId = notes?.userId;
+      const product = notes?.product;
 
-      if (!userId) {
-        console.error("❌ userId missing in Razorpay notes");
+      if (!userId || !product) {
         return NextResponse.json(
-          { error: "Missing userId" },
+          { error: "Missing userId or product" },
           { status: 400 }
         );
       }
 
-      // ✅ Upgrade subscription + set expiry (30 days)
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          subscriptionTier: "pro",
-          subscriptionStatus: "active",
-          subscriptionEndDate: new Date(
-            Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days
-          ),
-        },
-      });
+      // ==============================
+      // 🔵 SIMPJOBS PRODUCT
+      // ==============================
+      if (product === "simpjobs") {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            subscriptionTier: "pro",
+            subscriptionStatus: "active",
+            subscriptionEndDate: new Date(
+              Date.now() + 30 * 24 * 60 * 60 * 1000
+            ),
+          },
+        });
 
-      console.log("✅ Subscription upgraded to PRO for userId:", userId);
+        console.log("✅ SimpJobs upgraded:", userId);
+      }
+
+      // ==============================
+      // 🟣 FORMULAGPT PRODUCT
+      // ==============================
+      if (product === "formulagpt") {
+        const premiumUntil = new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        );
+
+        await supabaseAdmin
+          .from("profiles")
+          .update({
+            is_premium: true,
+            premium_until: premiumUntil.toISOString(),
+          })
+          .eq("id", userId);
+
+        console.log("✅ FormulaGPT upgraded:", userId);
+      }
     }
 
     return NextResponse.json({ received: true });
   } catch (err) {
-    console.error("❌ Webhook error:", err);
+    console.error("Webhook error:", err);
     return NextResponse.json({ error: "Webhook error" }, { status: 500 });
   }
 }

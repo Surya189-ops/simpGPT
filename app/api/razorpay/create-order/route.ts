@@ -35,7 +35,8 @@ export async function POST(req: Request) {
       currency: "INR",
       receipt: `simpjobs_${planName}_${Date.now()}`,
       notes: {
-        userId: session.user.id,   // 🔥 IMPORTANT
+        product: "simpjobs",   // 🔥 Identify product
+        userId: session.user.id,
         planName,
       },
     });

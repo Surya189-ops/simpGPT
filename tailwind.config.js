@@ -2,6 +2,7 @@
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: "class", // ✅ REQUIRED for manual dark/light toggle
   content: [
     './pages/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',

@@ -35,6 +35,11 @@ model User {
   emailVerified       DateTime?
   password            String?
   image               String?
+  
+  // NEW: Track which app owns this user
+  // "simpjobs" = created by SimpJobs
+  // "formulagpt" = created by FormulaGPT
+  source              String   @default("simpjobs")
 
   // Subscription
   subscriptionTier    SubscriptionTier   @default(free)
@@ -56,6 +61,7 @@ model User {
   savedJobs           SavedJob[]
 
   @@index([email])
+  @@index([source])
 }
 
 model Account {

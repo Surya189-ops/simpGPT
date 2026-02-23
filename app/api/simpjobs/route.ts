@@ -5,6 +5,21 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 
+// Import AI cache
+import { aiCache, cacheKeys } from "@/lib/jobs/aiCache";
+
+// Import mock job generator
+import { generateRealisticMockJobs } from "@/lib/jobs/mockJobGenerator";
+
+// Import scoring engine
+import {
+  calculateWeightedScore,
+  deduplicateJobs,
+  filterIrrelevantJobs,
+  shouldUseAIRanking,
+  applyMinimumThreshold,
+  generateMatchReasons,
+} from "@/lib/jobs/scoringEngine";
 
 function normalizeJobRole(input: string) {
   return input
@@ -14,39 +29,25 @@ function normalizeJobRole(input: string) {
     .trim();
 }
 
-
 function isValidJobQuery(input: string) {
   if (!input) return false;
 
   const q = input.trim().toLowerCase();
 
-  // too short
   if (q.length < 3) return false;
-
-  // no vowels = garbage
   if (!/[aeiou]/.test(q)) return false;
 
   const roleHints = [
-    "developer",
-    "engineer",
-    "intern",
-    "designer",
-    "manager",
-    "analyst",
-    "software",
-    "frontend",
-    "backend",
-    "data",
+    "developer", "engineer", "intern", "designer", "manager",
+    "analyst", "software", "frontend", "backend", "data",
   ];
 
   return q.includes(" ") || roleHints.some(word => q.includes(word));
 }
 
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
 
 const TIER_LIMITS = {
   free: {
@@ -66,7 +67,6 @@ const TIER_LIMITS = {
   },
 };
 
-
 interface Job {
   id: string;
   title: string;
@@ -79,7 +79,6 @@ interface Job {
   matchReasons?: string[];
 }
 
-// Job site configurations
 const jobSiteConfigs: Record<string, { domains: string[]; searchPattern: string }> = {
   linkedin: {
     domains: ["linkedin.com"],
@@ -107,8 +106,6 @@ const jobSiteConfigs: Record<string, { domains: string[]; searchPattern: string 
   },
 };
 
-
-// Location-based job site recommendations
 const locationJobSites: Record<string, string[]> = {
   india: ["naukri", "linkedin", "indeed"],
   us: ["linkedin", "indeed", "wellfound", "glassdoor"],
@@ -117,183 +114,66 @@ const locationJobSites: Record<string, string[]> = {
   remote: ["remote", "wellfound", "linkedin"],
 };
 
-
-function calculateMatchPercentage(
-  jobTitle: string,
-  userSkills: string,
-  userExperience: string
-): number {
-  let matchScore = 50; // Base score
-
-  if (!userSkills && !userExperience) return matchScore;
-
-  const titleLower = jobTitle.toLowerCase();
-
-  // Skills matching
-  if (userSkills) {
-    const skills = userSkills.toLowerCase().split(/[,\s]+/).filter(Boolean);
-    const matchedSkills = skills.filter(skill => titleLower.includes(skill));
-    matchScore += Math.min(30, matchedSkills.length * 10);
-  }
-
-  // Experience matching
-  if (userExperience && titleLower.includes(userExperience.toLowerCase())) {
-    matchScore += 20;
-  }
-
-  // Cap at 95% (never show 100% to maintain credibility)
-  return Math.min(95, matchScore);
-}
-
-function generateSearchQuery(
-  jobRole: string,
-  location: string,
-  selectedSite: string,
-  skills?: string
-): string {
-  const sitesToSearch = selectedSite === "all"
-    ? locationJobSites[location] || ["linkedin", "indeed"]
-    : [selectedSite];
-
-  const queries = sitesToSearch.map(site => {
-    const config = jobSiteConfigs[site];
-    if (!config) return `${jobRole} jobs ${location}`;
-
-    return config.searchPattern
-      .replace("{role}", jobRole)
-      .replace("{location}", location === "remote" ? "remote" : location);
-  });
-
-  return queries.join(" OR ");
-}
-
-function getRoleVariations(role: string, experience?: string) {
-  const baseRole = normalizeJobRole(role);
-
-  // 🎓 INTERN MODE
-  if (experience === "intern") {
-    return [
-      `${role} Intern`,
-      `${role} Internship`,
-      `Intern - ${role}`,
-      `Graduate Intern ${role}`,
-      `${role} Trainee`,
-    ];
-  }
-
-  const map: Record<string, string[]> = {
-    "gym trainer": ["Gym Trainer", "Fitness Trainer", "Personal Trainer"],
-    "video editor": ["Video Editor", "Content Editor", "Reels Editor"],
-    "data analyst": ["Data Analyst", "Business Analyst"],
-    "frontend developer": ["Frontend Developer", "React Developer"],
-  };
-
-  return map[baseRole] || [role];
-}
-
+// AI typo correction with caching and timeout
 async function correctJobRoleWithAI(input: string): Promise<string> {
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You correct job role spelling mistakes. Return ONLY the corrected job title. No explanations.",
-        },
-        {
-          role: "user",
-          content: input,
-        },
-      ],
-    });
+  if (!process.env.OPENAI_API_KEY) return input;
 
-    const corrected = completion.choices[0].message.content?.trim();
+  const cacheKey = cacheKeys.typoCorrection(input);
 
-    return corrected && corrected.length > 0 ? corrected : input;
-  } catch {
-    return input; // fallback (never break search)
-  }
+  return await aiCache.getOrCompute(
+    cacheKey,
+    async () => {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content: "You correct job role spelling mistakes. Return ONLY the corrected job title. No explanations.",
+            },
+            {
+              role: "user",
+              content: input,
+            },
+          ],
+          timeout: 10000,
+        });
+
+        const corrected = completion.choices[0].message.content?.trim();
+        return corrected && corrected.length > 0 ? corrected : input;
+      } catch (err: any) {
+        console.error("AI typo correction failed:", err.message || err);
+        return input;
+      }
+    },
+    input
+  );
 }
 
-
-function generateMockJobs(
-  jobRole: string,
-  location: string,
-  selectedSite: string,
-  skills: string,
-  experience: string,
-  isPro: boolean
-): Job[] {
-
-  const companies = [
-    "Google", "Microsoft", "Amazon", "Meta", "Apple",
-    "Netflix", "Tesla", "Uber", "Airbnb", "Spotify",
-    "Adobe", "Salesforce", "Oracle", "IBM", "Intel",
-    "Cisco", "VMware", "Stripe", "Shopify", "Zoom",
-    "TCS", "Infosys", "Wipro", "Accenture", "Cognizant"
-  ];
-
-  const jobTypes = ["Full-time", "Contract", "Part-time", "Remote"];
-  const timePosted = ["Just now", "1 day ago", "2 days ago", "3 days ago", "1 week ago"];
-
-  const sitesToUse = selectedSite === "all"
-    ? locationJobSites[location] || ["linkedin", "indeed", "glassdoor"]
-    : [selectedSite];
-
-  const numJobs = isPro ? 25 : 12;
-  const jobs: Job[] = [];
-
-  // 🔑 Role variations (prevents "Developer" pollution)
-  const roleVariants = getRoleVariations(jobRole, experience);
-
-  for (let i = 0; i < numJobs; i++) {
-    const company = companies[Math.floor(Math.random() * companies.length)];
-    const site = sitesToUse[i % sitesToUse.length];
-    const finalRole = roleVariants[i % roleVariants.length];
-
-    const baseMatch = calculateMatchPercentage(jobRole, skills, experience);
-    const variance = Math.floor(Math.random() * 15) - 5;
-    const internPenalty = experience === "intern" ? -10 : 0;
-    const matchPercentage = Math.max(
-      40,
-      Math.min(85, baseMatch + variance + internPenalty)
-    );
-
-
-
-    const locationName =
-      location === "remote" ? "Remote" :
-        location === "us" ? "United States" :
-          location === "india" ? "India" :
-            location === "uk" ? "United Kingdom" : "Europe";
-
-    jobs.push({
-      id: `job-${i}-${Date.now()}`,
-      title: finalRole, // ✅ FIXED
-      company,
-      location: locationName,
-      source: site,
-      matchPercentage,
-      posted: timePosted[Math.floor(Math.random() * timePosted.length)],
-      type: jobTypes[Math.floor(Math.random() * jobTypes.length)],
-    });
-  }
-
-  // 🆕 Latest + best match first
-  return jobs.sort((a, b) => b.matchPercentage - a.matchPercentage);
-}
-
+// AI ranking with caching and timeout
 async function rankJobsWithAI(
   jobs: Job[],
   jobRole: string,
   skills: string,
   experience: string
 ): Promise<Job[]> {
-  if (!jobs.length) return jobs;
+  if (!jobs.length || !process.env.OPENAI_API_KEY) return jobs;
+
+  const cacheKey = cacheKeys.aiRanking(jobRole, skills, experience);
 
   try {
+    const cachedScores = aiCache.get<Map<string, number>>(cacheKey);
+
+    if (cachedScores) {
+      return jobs
+        .map(job => ({
+          ...job,
+          matchPercentage: Math.min(95, cachedScores.get(job.id) ?? job.matchPercentage),
+        }))
+        .sort((a, b) => b.matchPercentage - a.matchPercentage);
+    }
+
     const prompt = `
 You are ranking jobs for relevance.
 
@@ -316,22 +196,15 @@ ${jobs.map(j => `ID: ${j.id}, Title: ${j.title}`).join("\n")}
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
+      timeout: 15000,
     });
 
     const raw = completion.choices[0].message.content || "[]";
-
-    // remove ```json ``` wrappers if present
-    const cleaned = raw
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-
+    const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
     const scores = JSON.parse(cleaned);
 
-
-    const scoreMap = new Map(
-      scores.map((s: any) => [s.id, s.score])
-    );
+    const scoreMap = new Map(scores.map((s: any) => [s.id, s.score]));
+    aiCache.set(cacheKey, scoreMap);
 
     return jobs
       .map(job => ({
@@ -340,21 +213,38 @@ ${jobs.map(j => `ID: ${j.id}, Title: ${j.title}`).join("\n")}
       }))
       .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
-  } catch (err) {
-    console.error("AI ranking failed:", err);
+  } catch (err: any) {
+    console.error("AI ranking failed:", err.message || err);
     return jobs;
   }
 }
 
-async function rankJobsWithResume(
-  jobs: Job[],
-  resumeData: any
-): Promise<Job[]> {
-  if (!jobs.length || !resumeData) return jobs;
+// Resume ranking with caching and timeout
+async function rankJobsWithResume(jobs: Job[], resumeData: any): Promise<Job[]> {
+  if (!jobs.length || !resumeData || !process.env.OPENAI_API_KEY) return jobs;
+
+  const userRole = resumeData.role || "";
+  const cacheKey = cacheKeys.resumeRanking(resumeData, userRole);
 
   try {
+    const cachedResults = aiCache.get<Map<string, { score: number; reasons: string[] }>>(cacheKey);
+
+    if (cachedResults) {
+      return jobs
+        .map(job => {
+          const match = cachedResults.get(job.id);
+          return {
+            ...job,
+            matchPercentage: Math.min(95, match?.score ?? job.matchPercentage),
+            matchReasons: match?.reasons?.length
+              ? match.reasons
+              : job.matchReasons || [],
+          };
+        })
+        .sort((a, b) => b.matchPercentage - a.matchPercentage);
+    }
+
     const userSkills = resumeData.skills?.join(", ") || "";
-    const userRole = resumeData.role || "";
     const userExperience = resumeData.experience || "";
 
     const prompt = `
@@ -380,6 +270,7 @@ ${jobs.map(j => `ID: ${j.id}, Title: ${j.title}, Company: ${j.company}`).join("\
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.2,
+      timeout: 15000,
     });
 
     const raw = completion.choices[0].message.content || "[]";
@@ -390,43 +281,42 @@ ${jobs.map(j => `ID: ${j.id}, Title: ${j.title}, Company: ${j.company}`).join("\
       scores.map((s: any) => [s.id, { score: s.score, reasons: s.reasons }])
     );
 
+    aiCache.set(cacheKey, scoreMap);
+
     return jobs
       .map(job => {
         const match = scoreMap.get(job.id);
         return {
           ...job,
           matchPercentage: Math.min(95, match?.score ?? job.matchPercentage),
-          matchReasons: match?.reasons || [],
+          // Preserve deterministic matchReasons, only override if AI provides reasons
+          matchReasons: match?.reasons?.length
+            ? match.reasons
+            : job.matchReasons || [],
         };
       })
       .sort((a, b) => b.matchPercentage - a.matchPercentage);
 
-  } catch (err) {
-    console.error("Resume-based ranking failed:", err);
+  } catch (err: any) {
+    console.error("Resume-based ranking failed:", err.message || err);
     return jobs;
   }
 }
 
-
-
 export async function POST(req: Request) {
   let user: any = null;
+
   try {
     const body = await req.json();
     const userCountry = body.country || "GLOBAL";
-
     const rawJobRole = body.jobRole || "";
     const displayRole = rawJobRole.trim();
 
-    // 🔥 AI typo correction
+    // AI typo correction (cached)
     const correctedRole = await correctJobRoleWithAI(displayRole);
-
-    // fallback normalize (for safety)
     const normalizedRole = normalizeJobRole(correctedRole);
 
-
-
-    // 🚫 BLOCK nonsense searches
+    // Block invalid queries
     if (!isValidJobQuery(displayRole)) {
       return new Response(
         JSON.stringify({
@@ -442,16 +332,13 @@ export async function POST(req: Request) {
       );
     }
 
-
     const { location, experience, skills, selectedSite } = body;
-
     const session = await getServerSession(authOptions);
 
-    // Initialize tier and limits outside the session block
     let tier: "free" | "starter" | "pro" = "free";
     let limits = TIER_LIMITS.free;
 
-    // 🌍 GLOBAL users → free starter access (temporary)
+    // Global users get starter tier
     if (userCountry !== "IN") {
       tier = "starter";
       limits = TIER_LIMITS.starter;
@@ -459,8 +346,7 @@ export async function POST(req: Request) {
 
     let updatedSearchCount: number | null = null;
 
-    // ✅ CHECK USER & LIMITS (SERVER-SIDE)
-    // ✅ CHECK USER & LIMITS (SERVER-SIDE)
+    // User authentication and limits
     if (session?.user?.email && userCountry === "IN") {
       user = await prisma.user.findUnique({
         where: { email: session.user.email },
@@ -473,11 +359,10 @@ export async function POST(req: Request) {
         );
       }
 
-      // 🔓 logged-in logic ONLY
       tier = (user.subscriptionTier as "free" | "starter" | "pro") || "free";
       limits = TIER_LIMITS[tier];
 
-      // ⏱️ cooldown
+      // Cooldown check
       if (user.lastSearchAt) {
         const diff = Date.now() - new Date(user.lastSearchAt).getTime();
         if (diff < 3000) {
@@ -488,7 +373,7 @@ export async function POST(req: Request) {
         }
       }
 
-      // 🔁 daily reset
+      // Daily reset
       const today = new Date().toDateString();
       const lastReset = user.lastSearchReset
         ? new Date(user.lastSearchReset).toDateString()
@@ -504,8 +389,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // ➕ increment
-      // ➕ increment
+      // Increment search count
       const updatedUser = await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -516,7 +400,7 @@ export async function POST(req: Request) {
 
       updatedSearchCount = updatedUser.searchCount;
 
-      // 🚫 block ONLY when user EXCEEDS limit (6th search)
+      // Enforce limits
       if (
         limits.searchesPerDay !== Infinity &&
         updatedSearchCount > limits.searchesPerDay
@@ -526,37 +410,67 @@ export async function POST(req: Request) {
           { status: 403 }
         );
       }
-
     }
 
-    // 🚨 GUEST USERS → NO COUNTING, NO PRISMA, NO BLOCK
-
-    // -----------------------------
-    // 🔍 YOUR JOB FETCH LOGIC BELOW
-    // -----------------------------
-
-    // ⚠️ REPLACE THIS MOCK WITH YOUR EXISTING JOB FETCH CODE
-    let jobs = generateMockJobs(
+    // Generate realistic mock jobs
+    let jobs = generateRealisticMockJobs(
       correctedRole,
       location,
       selectedSite || "all",
       skills || "",
       experience || "",
-      tier === "pro"
+      tier === "pro",
+      locationJobSites
     );
 
+    // ✅ Apply weighted scoring AND generate match reasons together
+    jobs = jobs.map(job => {
+      const score = calculateWeightedScore(
+        job,
+        correctedRole,
+        skills || "",
+        experience || "",
+        location
+      );
 
+      const reasons = generateMatchReasons(
+        job,
+        correctedRole,
+        skills || "",
+        experience || "",
+        location
+      );
 
-    // ✅ AI relevance ranking (ONLY starter + pro + API key present)
+      return {
+        ...job,
+        matchPercentage: score,
+        matchReasons: reasons,
+      };
+    });
+
+    // Filter irrelevant jobs
+    jobs = filterIrrelevantJobs(jobs, correctedRole, experience || "");
+
+    // Deduplicate
+    jobs = deduplicateJobs(jobs);
+
+    // Apply hard minimum threshold (remove jobs < 35%)
+    jobs = applyMinimumThreshold(jobs, 35);
+
+    // Sort by weighted score
+    jobs.sort((a, b) => b.matchPercentage - a.matchPercentage);
+
+    // SMART AI RANKING: Only call OpenAI when necessary
+    const isResumeSearch = body.useResume === true;
+    const useAI = shouldUseAIRanking(skills || "", experience || "", jobs, isResumeSearch);
+
     if (
       session?.user &&
       process.env.OPENAI_API_KEY &&
-      (tier === "starter" || tier === "pro")
+      (tier === "starter" || tier === "pro") &&
+      useAI
     ) {
       const jobsForAI = tier === "starter" ? jobs.slice(0, 20) : jobs;
-
-      // Check if this is a resume-based search
-      const isResumeSearch = body.useResume === true;
 
       if (isResumeSearch && user?.resumeData) {
         const resumeData = JSON.parse(user.resumeData as string);
@@ -571,10 +485,12 @@ export async function POST(req: Request) {
       }
     }
 
-
-
-    // 🆕 SORT LATEST JOBS FIRST
+    // Final sort with freshness tiebreaker
     jobs.sort((a, b) => {
+      if (b.matchPercentage !== a.matchPercentage) {
+        return b.matchPercentage - a.matchPercentage;
+      }
+
       const timeMap: Record<string, number> = {
         "Just now": 0,
         "1 day ago": 1,
@@ -586,7 +502,7 @@ export async function POST(req: Request) {
       return (timeMap[a.posted] ?? 99) - (timeMap[b.posted] ?? 99);
     });
 
-    // Enforce result limits based on tier
+    // Enforce result limits
     const limitedJobs =
       limits.resultsPerSearch === Infinity
         ? jobs
